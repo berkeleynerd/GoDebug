@@ -1078,6 +1078,7 @@ class DlvtVariableType(DlvObjectType):
         self.__map_element = False
         self.__uuid = None
         self.__error_message = None
+        self.mapKeyAddr = 0 # address of the key of a map
 
     def __getattr__(self, attr):
         if attr == "name" and self.__name is not None:
@@ -1133,6 +1134,7 @@ class DlvtVariableType(DlvObjectType):
 
         length = self.len
         capacity = self.cap
+        # for a pointer use its dereference for length
         if self._is_pointer():
             length = self._dereference()['len']
             capacity = self._dereference()['cap']
@@ -1149,9 +1151,20 @@ class DlvtVariableType(DlvObjectType):
 
         suffix_val = ""
         chldn_len = len(self.children)
+        val = ""
+        isStr = False
         if chldn_len == 0 and not self._is_slice() and not self._is_map():
             val = str(self.value)
-            if self._is_string():
+            isStr = self._is_string()
+        # for a pointer use dereference child for the value (so the value is shown on the "parent" without expanding)
+        if self._is_pointer() and chldn_len == 1 and not self._is_slice() and not self._is_map():
+            val = str(self._dereference()['value'])
+            isStr = (self.type == '*string')
+        if len(val) > 0:
+            # if length of val < as overall length => the value is cutted by "maxStringLen": mark it with @
+            if len(val) < length:
+                val += "@"
+            if isStr:
                 val = '"%s"' % val
             if not self.__map_element:
                 suffix_val = " = "
@@ -1160,13 +1173,15 @@ class DlvtVariableType(DlvObjectType):
         if output != "":
             output += "\n"
         if not self._is_map_element():
-            output += "%s%s%s %s%s%s" % (indent, icon, self.name, self.type, suffix_len_cap, suffix_val)
+            # normal variables and pointers
+            output += "%s%s 0x%x %s %s%s%s" % (indent, icon, self.addr, self.name, self.type, suffix_len_cap, suffix_val)
         elif self._is_slice() or self._is_map():
             output += "%s%s%s: %s%s" % (indent, icon, self.name, self.type, suffix_len_cap)
         else:
-            output += "%s%s%s: %s" % (indent, icon, self.name, suffix_val)
+            # element of a map (key / value)
+            output += "%s%s 0x%x %s: 0x%x %s" % (indent, icon, self.mapKeyAddr, self.name, self.addr, suffix_val)
 
-        indent += "    "
+        indent += "   "
         if self.__expanded:
             for chld_var in self.__children:
                 output, line = chld_var._format(running, indent, output, line)
@@ -1208,9 +1223,11 @@ class DlvtVariableType(DlvObjectType):
     def __add_children(self):
         counter = 0
         map_element_key = None
+        mapKeyAddr = 0
         children = self.children
-        if self._is_pointer():
-            children = self._dereference()['children']
+# if a pointer it should be a child!
+#        if self._is_pointer():
+#            children = self._dereference()['children']
         for child in children:
             chld_var = DlvtVariableType(self)
             chld_var._update({"Variable": child})
@@ -1219,14 +1236,29 @@ class DlvtVariableType(DlvObjectType):
                 counter += 1
             if self._is_map():
                 if map_element_key is None:
-                    val = chld_var.value
+                    # key of the map
+                    if chld_var._is_pointer():
+                        val = chld_var._dereference()['value']
+                        mapKeyAddr = chld_var._dereference()['addr'] # save the addr of the map-key
+                        length = chld_var._dereference()['len']
+                    else:
+                        val = chld_var.value
+                        mapKeyAddr = chld_var.addr # save the addr of the map-key
+                        length = chld_var.len
+                    if len(val) < length:
+                        val += "@"
                     if chld_var._is_string():
                         val = '"%s"' % val
+                    # this will not work probably when its a struct :-(
                     map_element_key = val
                     continue
                 else:
+                    # value of the map (this is the last "call" and this object wins)
                     chld_var._set_map_key(map_element_key)
                     map_element_key = None
+                    # store the map-ID addr and reset it
+                    chld_var.mapKeyAddr = mapKeyAddr
+                    mapKeyAddr = 0
             self.__children.append(chld_var)
     
     def _has_children(self):
