@@ -29,8 +29,8 @@ def __stop(connect, const, logger):
 def __default_cfg():
     return  {  
                 'followPointers': True,
-                'maxVariableRecurse': 1,
-                'maxStringLen': 64,
+                'maxVariableRecurse': 5,
+                'maxStringLen': 128,
                 'maxArrayValues': 64,
                 'maxStructFields': -1
             }
