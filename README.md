@@ -15,6 +15,8 @@ This fork is based on [dishmaev v0.3.9](https://github.com/dishmaev/GoDebug) and
 * `time.Time` objects will shown the timestamp in the format `YYYY-MM-DD HH:MM:SS`
 * if a variable is currently not readable (by the process) a notification will shown as variable value
 * shows `nil` on pointer, interfaces, channels, functions
+* disable word_wrap for all debugger views
+* use smaller font for all debugger views
 
 ## Installation
 Only manually clone git repository [GoDebug](https://github.com/codeproducer198/GoDebug.git) in your package directory.

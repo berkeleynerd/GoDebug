@@ -50,6 +50,14 @@ class DlvView(object):
         self.__view.set_read_only(True)
         self.__view.settings().set('command_mode', False)
 
+        # set smaller font size
+        fontsize = self.__view.settings().get('font_size') - 2
+        if fontsize < 8:
+            fontsize = 8
+        self.__view.settings().set('font_size', fontsize)
+        # disable word-wrap for all debugger views
+        self.__view.settings().set('word_wrap', False)
+
     def is_open_at_start(self):
         return False if self.__name == '' else self.__const.get_view_setting(self.__name, self.__const.OPEN_AT_START)
 
