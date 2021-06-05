@@ -1134,10 +1134,12 @@ class DlvtVariableType(DlvObjectType):
             else:
                 icon = "+"
 
+        chldn_len = len(self.children)
+
         length = self.len
         capacity = self.cap
         # for a pointer use its dereference for length
-        if self._is_pointer():
+        if self._is_pointer() and chldn_len == 1:
             length = self._dereference()['len']
             capacity = self._dereference()['cap']
         suffix_len_cap = ""
@@ -1152,7 +1154,6 @@ class DlvtVariableType(DlvObjectType):
             suffix_len_cap = "(cap: %s)" % suffix_cap
 
         suffix_val = ""
-        chldn_len = len(self.children)
         val = ""
         isStr = False
         if chldn_len == 0 and not self._is_slice() and not self._is_map():
