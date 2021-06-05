@@ -1164,8 +1164,11 @@ class DlvtVariableType(DlvObjectType):
             isStr = self._is_string()
         # for a pointer use dereference child for the value (so the value is shown on the "parent" without expanding)
         if self._is_pointer() and chldn_len == 1 and not self._is_slice() and not self._is_map():
-            val = str(self._dereference()['value'])
-            isStr = (self.type == '*string')
+            if self._dereference()['addr'] == 0:
+                val = "nil"
+            else:
+                val = str(self._dereference()['value'])
+                isStr = (self.type == '*string')
         # show time in human representation for fields
         if self._is_time():
             if self._is_pointer():
