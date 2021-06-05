@@ -1123,6 +1123,9 @@ class DlvtVariableType(DlvObjectType):
         return (self.__error_message != None)
 
     def _format(self, running, indent="", output="", line=0):
+        if hasattr(self, 'unreadable') and len(self.unreadable) > 0:
+            self.__error_message = "unreadable: " + self.unreadable
+
         self.__line = line
         line += 1
         icon = " "
