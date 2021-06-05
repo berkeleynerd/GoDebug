@@ -1149,8 +1149,11 @@ class DlvtVariableType(DlvObjectType):
         # this is the info about length and capacity ("(len: 2, cap: 2)")
         suffix_len_cap = self._get_len_cap(length, capacity)
 
-        # this is the "value" of the variable; normal string or map-values, structs fields...
-        suffix_val = self._get_variable_value(chldn_len, length, capacity)
+        if self._is_nil(chldn_len):
+            suffix_val = " = nil"
+        else:
+            # this is the "value" of the variable; normal string or map-values, structs fields...
+            suffix_val = self._get_variable_value(chldn_len, length, capacity)
 
         if output != "":
             output += "\n"
@@ -1198,7 +1201,7 @@ class DlvtVariableType(DlvObjectType):
         since1970 = since0001 - 62135596800
         return datetime.datetime.utcfromtimestamp(since1970).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    def _is_slice(self): 
+    def _is_slice(self):
         return self.type.startswith('[')
 
     def _is_map(self):
@@ -1239,6 +1242,25 @@ class DlvtVariableType(DlvObjectType):
             suffix_len_cap = "(cap: %s)" % suffix_cap
 
         return suffix_len_cap
+
+    def _is_nil(self, chldn_len):
+        # see: https://pkg.go.dev/reflect#Kind
+        kind = self.kind
+
+        # nil pointer
+        if self._is_pointer() and chldn_len == 1 and self._dereference()['addr'] == 0:
+            return True
+        # nil interface (kind_20=interface, kind_0=invalid)
+        elif kind == 20 and chldn_len == 1 and self.children[0]['kind'] == 0:
+            return True
+        # nil function (kind_19=func)
+        elif kind == 19 and len(self.value) == 0:
+            return True
+        # channel function (kind_18=func)
+        elif kind == 18 and not self._has_children():
+            return True
+        else:
+            return False
 
     def _get_variable_value(self, chldn_len, length, capacity):
         val = ""
