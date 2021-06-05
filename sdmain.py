@@ -8,6 +8,8 @@ import sys
 import re
 import signal
 import uuid
+import datetime
+import ctypes
 
 from GoDebug.sdconst import DlvConst
 from GoDebug.sdlogger import DlvLogger
@@ -1160,6 +1162,16 @@ class DlvtVariableType(DlvObjectType):
         if self._is_pointer() and chldn_len == 1 and not self._is_slice() and not self._is_map():
             val = str(self._dereference()['value'])
             isStr = (self.type == '*string')
+        # show time in human representation for fields
+        if self._is_time():
+            if self._is_pointer():
+                chld_var = DlvtVariableType(self)
+                chld_var._update({"Variable": self.children[0]})
+                # the pointer must have a valid instance
+                if chld_var._is_time():
+                    val = chld_var._get_time()
+            else:
+                val = self._get_time()
         if len(val) > 0:
             # if length of val < as overall length => the value is cutted by "maxStringLen": mark it with @
             if len(val) < length:
@@ -1195,6 +1207,26 @@ class DlvtVariableType(DlvObjectType):
 
     def _is_string(self): 
         return (self.type == 'string')
+
+    def _is_time(self):
+        return ((self.type == 'time.Time' or self.type == '*time.Time') and len(self.children) > 0)
+
+    def _get_time(self):
+        assert (self._is_time() and len(self.children) > 0)
+        wall = int(self.children[0]['value'])
+        ext = int(self.children[1]['value'])
+        # for calc the wall to seconds since 01.01.0001 see https://golang.org/src/time/time.go - method sec()
+        if (wall & (1 << 63)) !=0:
+            # wallToInternal = (1884*365 + int(1884/4) - int(1884/100) + int(1884/400)) * (60*60*24) => 59453308800; be aware to not use floating points for division!
+            # nsecShift = 30
+            # wallToInternal + int64(t.wall << 1 >> (nsecShift + 1))
+            # use unsigned longs for bit shifting!
+            since0001 = since0001 = 59453308800 + ctypes.c_ulonglong( (ctypes.c_ulonglong(wall << 1).value) >>(31) ).value
+        else:
+            since0001 = ext
+        # go time is in seconds from 01.01.0001 but python's format is from 01.01.1970. so remove the 1969 years (= 62135596800 seconds)
+        since1970 = since0001 - 62135596800
+        return datetime.datetime.utcfromtimestamp(since1970).strftime('%Y-%m-%dT%H:%M:%SZ')
 
     def _is_slice(self): 
         return self.type.startswith('[')
