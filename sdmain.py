@@ -1199,7 +1199,11 @@ class DlvtVariableType(DlvObjectType):
             since0001 = ext
         # go time is in seconds from 01.01.0001 but python's format is from 01.01.1970. so remove the 1969 years (= 62135596800 seconds)
         since1970 = since0001 - 62135596800
-        return datetime.datetime.utcfromtimestamp(since1970).strftime('%Y-%m-%dT%H:%M:%SZ')
+        if since1970 >= -62135596800 and since1970 <= 253402300799:
+            # python can only show valid unix times from year 0001 - 9999
+            return datetime.datetime.utcfromtimestamp(since1970).strftime('%Y-%m-%dT%H:%M:%SZ')
+        else:
+            return "timestamp out of range to display"
 
     def _is_slice(self):
         return self.type.startswith('[')
