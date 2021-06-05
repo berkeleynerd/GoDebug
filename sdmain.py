@@ -1145,49 +1145,12 @@ class DlvtVariableType(DlvObjectType):
         if self._is_pointer() and chldn_len == 1:
             length = self._dereference()['len']
             capacity = self._dereference()['cap']
-        suffix_len_cap = ""
-        suffix_len = str(length) if length > 0 or (length >= 0 and self._is_slice()) else ""
-        suffix_cap = str(capacity) if capacity > 0 or (capacity >= 0 and self._is_slice()) else ""
 
-        if suffix_len != "" and suffix_cap != "":
-            suffix_len_cap = "(len: %s, cap: %s)" % (suffix_len, suffix_cap)
-        elif suffix_len != "":
-            suffix_len_cap = "(len: %s)" % suffix_len
-        elif suffix_cap != "":
-            suffix_len_cap = "(cap: %s)" % suffix_cap
+        # this is the info about length and capacity ("(len: 2, cap: 2)")
+        suffix_len_cap = self._get_len_cap(length, capacity)
 
-        suffix_val = ""
-        val = ""
-        isStr = False
-        if chldn_len == 0 and not self._is_slice() and not self._is_map():
-            val = str(self.value)
-            isStr = self._is_string()
-        # for a pointer use dereference child for the value (so the value is shown on the "parent" without expanding)
-        if self._is_pointer() and chldn_len == 1 and not self._is_slice() and not self._is_map():
-            if self._dereference()['addr'] == 0:
-                val = "nil"
-            else:
-                val = str(self._dereference()['value'])
-                isStr = (self.type == '*string')
-        # show time in human representation for fields
-        if self._is_time():
-            if self._is_pointer():
-                chld_var = DlvtVariableType(self)
-                chld_var._update({"Variable": self.children[0]})
-                # the pointer must have a valid instance
-                if chld_var._is_time():
-                    val = chld_var._get_time()
-            else:
-                val = self._get_time()
-        if len(val) > 0:
-            # if length of val < as overall length => the value is cutted by "maxStringLen": mark it with @
-            if len(val) < length:
-                val += "@"
-            if isStr:
-                val = '"%s"' % val
-            if not self.__map_element:
-                suffix_val = " = "
-            suffix_val += val
+        # this is the "value" of the variable; normal string or map-values, structs fields...
+        suffix_val = self._get_variable_value(chldn_len, length, capacity)
 
         if output != "":
             output += "\n"
@@ -1219,7 +1182,7 @@ class DlvtVariableType(DlvObjectType):
         return ((self.type == 'time.Time' or self.type == '*time.Time') and len(self.children) > 0)
 
     def _get_time(self):
-        assert (self._is_time() and len(self.children) > 0)
+        assert (self._is_time() and self._has_children())
         wall = int(self.children[0]['value'])
         ext = int(self.children[1]['value'])
         # for calc the wall to seconds since 01.01.0001 see https://golang.org/src/time/time.go - method sec()
@@ -1258,6 +1221,63 @@ class DlvtVariableType(DlvObjectType):
 
     def _collapse(self):
         self.__expanded = False
+
+    def _has_children(self):
+        return len(self.children) > 0
+
+    def _get_len_cap(self, length, capacity):
+        suffix_len = str(length) if length > 0 or (length >= 0 and self._is_slice()) else ""
+        suffix_cap = str(capacity) if capacity > 0 or (capacity >= 0 and self._is_slice()) else ""
+
+        suffix_len_cap = ""
+
+        if suffix_len != "" and suffix_cap != "":
+            suffix_len_cap = "(len: %s, cap: %s)" % (suffix_len, suffix_cap)
+        elif suffix_len != "":
+            suffix_len_cap = "(len: %s)" % suffix_len
+        elif suffix_cap != "":
+            suffix_len_cap = "(cap: %s)" % suffix_cap
+
+        return suffix_len_cap
+
+    def _get_variable_value(self, chldn_len, length, capacity):
+        val = ""
+
+        # show time in human representation for fields
+        if self._is_time():
+            if self._is_pointer():
+                chld_var = DlvtVariableType(self)
+                chld_var._update({"Variable": self.children[0]})
+                # the pointer must have a valid instance
+                if chld_var._is_time():
+                    val = chld_var._get_time()
+            else:
+                val = self._get_time()
+            return " = " + val
+
+        isStr = False
+
+        # normal variable with value
+        if chldn_len == 0 and not self._is_slice() and not self._is_map():
+            val = str(self.value)
+            isStr = self._is_string()
+
+        # for a pointer use dereference child for the value (so the value is shown on the "parent" without expanding)
+        if self._is_pointer() and chldn_len == 1 and not self._is_slice() and not self._is_map():
+            val = str(self._dereference()['value'])
+            isStr = (self.type == '*string')
+
+        # now the value was determined, format it
+        if len(val) > 0:
+            # if length of val < as overall length => the value is cutted by "maxStringLen": mark it with @
+            if len(val) < length:
+                val += "@"
+            if isStr:
+                val = '"%s"' % val
+            if not self.__map_element:
+                val = " = " + val
+
+        return val
 
     def __add_children(self):
         counter = 0
@@ -1299,9 +1319,6 @@ class DlvtVariableType(DlvObjectType):
                     chld_var.mapKeyAddr = mapKeyAddr
                     mapKeyAddr = 0
             self.__children.append(chld_var)
-    
-    def _has_children(self):
-        return len(self.children) > 0
 
 class DlvVariableView(DlvView):
     def __init__(self, name, prj, view=None):
